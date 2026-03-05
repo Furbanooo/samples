@@ -66,9 +66,9 @@ expert_generation_instructions = '''
 You are an expert in profiling, your goal is to assign experts to each subtopic. 
 Rules:
 
-1. For each provided subtopic, identify a suitable expert.
-2. Provide the expert's name, area of expertise, and associated subtopic.
-3. Ensure the expert's expertise aligns with the subtopic.
+1. For each provided {domain}, identify a suitable expert.
+2. Provide the expert's name, area of expertise, and associated {domain}.
+3. Ensure the expert's expertise aligns with the {domain}.
 4. Output must strictly follow the required structured schema.
 '''
 
@@ -159,6 +159,19 @@ def generate_experts(state: TopicBreakdownState):
     experts = structured_llm.invoke([system_message, user_message])
 
     return {'experts': experts.experts}
+
+
+#Proced to research 
+expert_task_instructions = '''
+You are an expert researcher tasked with gathering information on the specific subtopic "{subtopic}" assigned to you. 
+Rules:
+1. Focus solely on the assigned subtopic and its direct subtopics if applicable.
+2. Gather comprehensive and relevant information, including key concepts, recent developments, and foundational knowledge.
+3. Ensure the information is accurate, up-to-date, and from credible sources.
+4. Summarize findings in a clear and concise manner, suitable for someone aiming to achieve professional-level understanding of the subtopic.
+5. If the subtopic has nested subtopics, provide a brief overview of how they relate to the main subtopic and what specific information is relevant for each nested subtopic.
+''' 
+
 
 builder = StateGraph(TopicBreakdownState)
 builder.add_node('gather_initial_focus', gather_initial_focus)
