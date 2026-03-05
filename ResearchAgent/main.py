@@ -1,4 +1,4 @@
-from agent.graph import graph
+from agent.graph import run_with_human_feedback
 
 
 def print_subtopic(subtopic, experts_map, indent=0):
@@ -10,7 +10,7 @@ def print_subtopic(subtopic, experts_map, indent=0):
     # Print experts for this subtopic
     if subtopic.title in experts_map:
         for expert in experts_map[subtopic.title]:
-            print(f"{prefix}   @ Expert: {expert.name} ({expert.expertise})")
+            print(f"{prefix}   @Expert: {expert.name} ({expert.expertise})")
     
     # Recursively print nested subtopics
     for child in subtopic.subtopics:
@@ -35,6 +35,10 @@ def print_results(topic, result):
         print_subtopic(subtopic, experts_map)
         print()
 
+    print("=" * 60 + "\n")
+    print(f" Topic Tree: {result.get('TopicTree', [])}")
+    print(f" Experts: {result.get('experts', [])}")
+
 
 def main():
     while True:
@@ -43,11 +47,7 @@ def main():
         if input_topic.lower() == 'exit':
             break
 
-        state = {
-            'Topic': input_topic,
-            'estimatedDepth': 3,
-        }
-        result = graph.invoke(state)
+        result = run_with_human_feedback(input_topic, depth=3)
         print_results(input_topic, result)
 
 
