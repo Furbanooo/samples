@@ -74,7 +74,7 @@ Rules:
 
 #Breakdown topic into subtopics and defining an expert for each subtopic, and the estimated depth of the topic tree.
 def _extract_domains(subtopics: List[SubTopic]) -> List[SubTopic]:
-    return [subtopic for subtopic in subtopics if subtopic.subtopics]
+    return [subtopic for subtopic in subtopics if subtopic.subtopics] # I'm trying to get only the top subtopics as domains, but it's not working as expected. I need to debug this.
 
 def gather_initial_focus(state: TopicBreakdownState):
     Topic = state['Topic']

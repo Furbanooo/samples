@@ -54,6 +54,7 @@ chroma/
 *.pkl
 
 # =========================
-# LangGraph local state
+# LangGraph 
 # =========================
-.langgraph/
+.langgraph_api
+langgraph.json
