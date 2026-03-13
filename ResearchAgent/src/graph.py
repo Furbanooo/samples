@@ -2,7 +2,7 @@ from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 from typing import List, TypedDict, Required, Dict, Any
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI, tools
+from langchain_openai import ChatOpenAI
 from langchain_community.tools.tavily_search import TavilySearchResults
 from langchain_community.document_loaders import WikipediaLoader
 from langgraph.checkpoint.memory import MemorySaver
@@ -31,12 +31,6 @@ class TopicBreakdownState(TypedDict, total=False):
     domains: List[SubTopic]
     experts: List["Expert"]
     humanPrompt: str  
-
-class TopicTree(BaseModel):
-    subTopics: List[SubTopic] = Field(
-        default_factory=list,
-        description="A list of subtopics, each containing a title, description, and optionally nested subtopics."
-    )
 
 class Expert(BaseModel):
     name: str = Field(..., description="The name of the expert.")
@@ -75,12 +69,12 @@ Rules:
 '''
 
 expert_generation_instructions = ''' 
-You are an expert in profiling, your goal is to assign experts to each subtopic. 
+You are an expert in profiling, your goal is to assign experts to this {domains}. 
 Rules:
 
-1. For each provided subtopic, identify a suitable expert.
-2. Provide the expert's name, area of expertise, and associated subtopic.
-3. Ensure the expert's expertise aligns with the subtopic.
+1. For each provided {domain}, identify a suitable expert.
+2. Provide the expert's name, area of expertise, and associated {domain}.
+3. Ensure the expert's expertise aligns with the {domain}.
 4. Output must strictly follow the required structured schema.
 '''
 
@@ -160,7 +154,7 @@ def generate_experts(state: TopicBreakdownState):
     structured_llm = llm.with_structured_output(ExpertsPayload)
     domains= state.get('domains', [])
 
-    system_message = SystemMessage(content=expert_generation_instructions)
+    system_message = SystemMessage(content=expert_generation_instructions.format(domains=domains))
     user_message = HumanMessage(
         content=(
             f"Assign experts to the following domains: {domains}. "
@@ -248,7 +242,7 @@ search_query_instructions = '''
     2. Wikipedia Loader: Use this tool to retrieve information from Wikipedia on the subtopic. This can provide a good overview and foundational knowledge.
     3. Your own knowledge: As an expert, you can also provide insights and information based on your expertise and experience in the field.
 '''
-@tools 
+
 def tavily_search(state: ResearchState, expert: Expert, topic: str, query: str) -> dict:
     travily_search = TavilySearchResults()
 

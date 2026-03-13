@@ -1,4 +1,4 @@
-from agent.graph import run_with_human_feedback
+from src.graph import run_with_human_feedback
 
 
 def print_subtopic(subtopic, experts_map, indent=0):
