@@ -32,7 +32,7 @@ branches **in parallel** — one branch per expert.
 │                                                                 │
 │   ┌─────────┐     ┌──────────────────┐                         │
 │   │  START  │────▶│    Supervisor    │                         │
-│   └─────────┘     │  (gpt-4o, T=0)  │                         │
+│   └─────────┘     │  (mini, T=0)    │                         │
 │                   │                  │                         │
 │                   │  reads last 5    │                         │
 │                   │  messages and    │                         │
@@ -198,6 +198,26 @@ WriterState (writer sub-graph, TypedDict)
 ├── written_sections  — operator.add reducer
 └── writer_draft
 ```
+
+---
+
+## Model strategy
+
+All models are defined in a single file (`src/models.py`) — change model or swap tier there, nowhere else.
+
+```
+src/models.py
+├── ROUTER  — gpt-4o-mini · T=0   · supervisor routing
+├── STRICT  — gpt-4o-mini · T=0   · all structured-output tasks
+│                                   (expert breakdown, search queries, planning, assembly)
+├── ANALYST — gpt-4o      · T=0.7 · answer_deep_questions
+│                                   (research depth feeds writing quality)
+└── WRITER  — gpt-4o      · T=0.7 · write_section
+                                    (the prose the user reads)
+```
+
+`ANALYST` and `WRITER` run in separate phases — research finishes before writing starts —
+so the 30k TPM budget on `gpt-4o` tier-1 resets between them.
 
 ---
 

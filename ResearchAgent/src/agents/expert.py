@@ -1,4 +1,3 @@
-from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 from typing import List, Optional
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
@@ -6,10 +5,9 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 from ..overallState import overallState, SubTopic, Expert, TopicBreakdownResult
 from ..prompts import topicBreakdown_instructions, expert_generation_instructions
-from ..models import CREATIVE
+from ..models import STRICT
 
-load_dotenv()
-llm = CREATIVE
+llm = STRICT
 
 
 class TopicBreakdownSchema(BaseModel):
@@ -71,11 +69,10 @@ def breakdown_topic(state: privateState):
     )
     user_message = HumanMessage(
         content=(
-            f"Break down the topic '{Topic}' into concrete top-level subtopics "
-            f"with recursive nested subtopics.{focus_context} "
-            f"Keep maximum depth at {estimatedDepth}. "
-            "Allow uneven branch depth: stop early for atomic branches and go "
-            "deeper only when meaningful. "
+            f"Break down the topic '{Topic}' into subtopics.{focus_context} "
+            f"Rules: max {estimatedDepth} levels deep, max 5 top-level subtopics, "
+            "max 3 children per node. Stop early for atomic subtopics. "
+            "Be concise — short titles and one-sentence descriptions only. "
             "Return the result strictly in the required schema."
         )
     )
@@ -177,18 +174,29 @@ def run_with_human_feedback(
     print("STARTING RESEARCH AGENT")
     print(f"{'='*50}\n")
 
+    # Track the last prompt shown so we never print the same message twice.
+    # stream_mode="values" re-emits the full state on every node step, so
+    # humanPrompt lingers in stale events (e.g. generate_experts still carries
+    # the review_breakdown prompt). Comparing against last_shown filters those out.
+    last_shown = ""
+
+    def _show_prompt(event: dict) -> None:
+        nonlocal last_shown
+        prompt = event.get('humanPrompt', '')
+        if prompt and prompt != last_shown:
+            print(f"\n{prompt}")
+            last_shown = prompt
+
     # --- Step 1: gather_initial_focus ---
     for event in graph.stream(initial_state, config, stream_mode="values"):
-        if event.get('humanPrompt'):
-            print(event['humanPrompt'])
+        _show_prompt(event)
 
     initial_focus = input("\nYour response: ").strip()
     graph.update_state(config, {"initialFocus": initial_focus})
 
     # --- Step 2: breakdown_topic → review_breakdown ---
     for event in graph.stream(None, config, stream_mode="values"):
-        if event.get('humanPrompt'):
-            print(f"\n{event['humanPrompt']}")
+        _show_prompt(event)
 
     # --- Step 3: iterative feedback loop ---
     final_state = {}
@@ -201,8 +209,7 @@ def run_with_human_feedback(
 
         for event in graph.stream(None, config, stream_mode="values"):
             final_state = event
-            if event.get('humanPrompt'):
-                print(f"\n{event['humanPrompt']}")
+            _show_prompt(event)
 
         snapshot = graph.get_state(config)
         if not snapshot.next:

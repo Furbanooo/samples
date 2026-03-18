@@ -1,24 +1,29 @@
+from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 
+load_dotenv()
+
 # ---------------------------------------------------------------------------
-# Model registry
+# Model registry — change models in one place, not scattered across agents.
 #
-# All agents import from here so model changes happen in one place.
+# Strategy: gpt-4o only where the user sees the output or reasoning depth
+# directly affects quality.  Everything structural stays on gpt-4o-mini.
 #
-# gpt-4o-mini vs gpt-4o
-#   gpt-4o      — 30k  TPM on tier 1, $2.50/$10 per 1M tokens
-#   gpt-4o-mini — 200k TPM on tier 1, $0.15/$0.60 per 1M tokens
+#   gpt-4o      — 30k  TPM tier-1 · $2.50 / $10  per 1M tokens
+#   gpt-4o-mini — 200k TPM tier-1 · $0.15 / $0.60 per 1M tokens
 #
-# Parallel section writes easily exceed 30k TPM, so gpt-4o-mini is the
-# right default here.  Swap `WRITER` to gpt-4o if you upgrade your tier
-# and want higher-quality prose.
+# Usage map
+# ─────────────────────────────────────────────────────────────────────────
+# ROUTER  (mini, t=0)   supervisor routing, search queries, deep questions
+# STRICT  (mini, t=0)   all structured-output tasks (plan, assemble, experts)
+# ANALYST (4o,   t=0.7) answer_deep_questions — research depth feeds writing
+# WRITER  (4o,   t=0.7) write_section         — the prose the user reads
+# ─────────────────────────────────────────────────────────────────────────
+# ANALYST and WRITER run in separate phases (research then writing), so the
+# 30k TPM budget has time to reset between them.
 # ---------------------------------------------------------------------------
 
-# Routing / structured decisions (supervisor, expert routing)
-ROUTER = ChatOpenAI(model="gpt-4o-mini", temperature=0)
-
-# Creative / generative tasks (expert breakdown, research answers, writing)
-CREATIVE = ChatOpenAI(model="gpt-4o-mini", temperature=0.7)
-
-# Strict structured output (plan_report, write_section schema)
-STRICT = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+ROUTER  = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+STRICT  = ChatOpenAI(model="gpt-4o-mini", temperature=0,   max_tokens=4096)
+ANALYST = ChatOpenAI(model="gpt-4o",      temperature=0.7)
+WRITER  = ChatOpenAI(model="gpt-4o",      temperature=0.7)

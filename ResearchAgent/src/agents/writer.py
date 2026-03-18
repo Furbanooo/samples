@@ -1,6 +1,5 @@
 import operator
 import json
-from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any, Literal
 from typing_extensions import TypedDict, Annotated
@@ -13,14 +12,11 @@ from ..overallState import (
     ReportVisual, WrittenSection,
 )
 from ..prompts import report_planning_instructions, section_writing_instructions
-from ..models import CREATIVE, STRICT
+from ..models import WRITER, STRICT
 
-load_dotenv()
-
-# Two temperatures:
-# - planner/writer uses 0.7 for creative, varied prose
-# - assembler uses 0.0 — pure deterministic formatting, no creativity needed
-llm        = CREATIVE
+# llm        — gpt-4o · write_section (the prose the user reads)
+# llm_strict — mini   · plan_report + assemble_report (structure only)
+llm        = WRITER
 llm_strict = STRICT
 
 
@@ -81,7 +77,11 @@ def _slice_notes_for_section(
         if capture:
             relevant.append(line)
 
-    return "\n".join(relevant) if found else researcher_notes
+    # Cap at 12 000 chars (~3 000 tokens) so a single write_section call never
+    # exceeds the 30 000 TPM limit on gpt-4o tier-1 (prompt + response budget).
+    MAX = 12_000
+    result = "\n".join(relevant) if found else researcher_notes
+    return result[:MAX]
 
 
 def _render_visual_html(visual: ReportVisual) -> str:

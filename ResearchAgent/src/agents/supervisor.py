@@ -1,4 +1,3 @@
-from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 from typing import Literal
 from langchain_core.messages import AIMessage, SystemMessage, HumanMessage
@@ -6,7 +5,6 @@ from ..overallState import overallState
 from ..prompts import SUPERVISOR_SYSTEM_PROMPT
 from ..models import ROUTER
 
-load_dotenv()
 llm = ROUTER
 
 

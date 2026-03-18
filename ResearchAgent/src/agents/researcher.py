@@ -1,5 +1,4 @@
 import operator
-from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any
 from typing_extensions import TypedDict, Annotated
@@ -11,10 +10,10 @@ from langgraph.types import Send
 
 from ..overallState import overallState, Expert, TopicBreakdownResult
 from ..prompts import search_query_instructions, deep_question_generation_instructions
-from ..models import CREATIVE
+from ..models import STRICT, ANALYST
 
-load_dotenv()
-llm = CREATIVE
+llm        = STRICT   # search queries, deep question generation
+llm_deep   = ANALYST  # answer_deep_questions — quality research
 
 
 class SearchQuery(BaseModel):
@@ -84,15 +83,22 @@ def tavily_search(state: ResearchState) -> dict:
         )),
     ])
 
-    tool    = TavilySearchResults()
-    results = tool.run(search_query.search_query)
+    try:
+        tool    = TavilySearchResults()
+        results = tool.run(search_query.search_query)
+    except Exception:
+        results = []   # Tavily is best-effort — don't crash the pipeline
     return {"search_results": {**state.search_results, "web_search": results}}
 
 
 def wikipedia_search(state: ResearchState) -> dict:
-    loader    = WikipediaLoader(query=state.expert.subtopic)
-    documents = loader.load()
-    return {"search_results": {**state.search_results, "wikipedia": [doc.page_content for doc in documents]}}
+    try:
+        loader    = WikipediaLoader(query=state.expert.subtopic)
+        documents = loader.load()
+        pages     = [doc.page_content for doc in documents]
+    except Exception:
+        pages = []   # Wikipedia is best-effort — don't crash the pipeline
+    return {"search_results": {**state.search_results, "wikipedia": pages}}
 
 
 def generate_deep_questions(state: ResearchState) -> dict:
@@ -119,7 +125,7 @@ def answer_deep_questions(state: ResearchState) -> dict:
     answers = dict(state.answers)   # copy — never mutate state in place
 
     for question in state.deep_questions:
-        response = llm.invoke([
+        response = llm_deep.invoke([
             SystemMessage(content=(
                 f"As an expert in {expert.expertise}, give a comprehensive "
                 f"answer about '{expert.subtopic}'."
