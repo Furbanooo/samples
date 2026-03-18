@@ -1,55 +1,18 @@
-from src.graph import run_with_human_feedback
+from dotenv import load_dotenv
+from langchain_core.messages import HumanMessage
+from src.graph import app
 
+load_dotenv()
 
-def print_subtopic(subtopic, experts_map, indent=0):
-    """Recursively print subtopic tree with associated experts."""
-    prefix = "  " * indent
-    print(f"{prefix}!! {subtopic.title}")
-    print(f"{prefix}   {subtopic.description}")
-    
-    # Print experts for this subtopic
-    if subtopic.title in experts_map:
-        for expert in experts_map[subtopic.title]:
-            print(f"{prefix}   @Expert: {expert.name} ({expert.expertise})")
-    
-    # Recursively print nested subtopics
-    for child in subtopic.subtopics:
-        print_subtopic(child, experts_map, indent + 1)
+config = {"configurable": {"thread_id": "research_1"}}
 
+print("Research Agent Active")
+topic = input("enter the topic: ")
 
-def print_results(topic, result):
-    """Pretty print the research breakdown with experts."""
-    print("\n" + "=" * 60)
-    print(f" TOPIC: {topic}")
-    print("=" * 60 + "\n")
-    
-    # Build experts lookup by subtopic
-    experts_map = {}
-    for expert in result.get('experts', []):
-        if expert.subtopic not in experts_map:
-            experts_map[expert.subtopic] = []
-        experts_map[expert.subtopic].append(expert)
-    
-    # Print each top-level subtopic tree
-    for subtopic in result.get('subTopics', []):
-        print_subtopic(subtopic, experts_map)
-        print()
-
-    print("=" * 60 + "\n")
-    print(f" Topic Tree: {result.get('TopicTree', [])}")
-    print(f" Experts: {result.get('experts', [])}")
-
-
-def main():
-    while True:
-        input_topic = input("Enter a topic you'd like to explore (or 'exit' to quit): ")
-        
-        if input_topic.lower() == 'exit':
-            break
-
-        result = run_with_human_feedback(input_topic, depth=3)
-        print_results(input_topic, result)
-
-
-if __name__ == "__main__":
-    main()
+for chunk in app.stream({
+    "messages": [HumanMessage(content=f"Research: {topic}")],
+}, config, stream_mode="values"):
+    if "messages" in chunk:
+        msg = chunk["messages"][-1]
+        role = msg.type if hasattr(msg, 'type') else msg.__class__.__name__
+        print(f"{role.upper()}: {msg.content[:100]}...")

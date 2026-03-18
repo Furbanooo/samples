@@ -1,101 +1,81 @@
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
-from typing import List, TypedDict, Required, Dict, Any
-from langchain_core.messages import HumanMessage, SystemMessage
+from typing import List, Optional
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
+from ..overallState import overallState, SubTopic, Expert, TopicBreakdownResult
+from ..prompts import topicBreakdown_instructions, expert_generation_instructions
 
-from overallState import overallState
-from prompts import expert_generation_instructions
+load_dotenv()
+llm = ChatOpenAI(model="gpt-4o", temperature=0.7)
 
-load_dotenv() 
-llm = ChatOpenAI(model="gpt-4-0613", temperature=0.7)
-config = {"configarable": {"thread_id": "research_agent_thread"}}
 
-# Define state and data models
-
-class TopicBreakdownState(BaseModel):
-    Topic: str
+class TopicBreakdownSchema(BaseModel):
+    """
+    Schema fed to the LLM via with_structured_output().
+    Kept separate from TopicBreakdownResult so the LLM schema can evolve
+    independently from the shared contract in overallState.py.
+    """
+    Topic:          str
     estimatedDepth: int
-    subTopics: List["SubTopic"]
-    domains: List[str]
-    experts: List["Expert"]
+    subTopics:      List[SubTopic] = Field(default_factory=list)
+    domains:        List[str]      = Field(default_factory=list)
+    experts:        List[Expert]   = Field(default_factory=list)
 
-class SubTopic(BaseModel):
-    title: str
-    description: str
-    subtopics: List["SubTopic"] = Field(default_factory=list)
+class ExpertsPayload(BaseModel):
+    experts: List[Expert] = Field(default_factory=list)
 
-class privateState(TopicBreakdownState):
+class privateState(TopicBreakdownSchema):
+    """
+    Extends the LLM schema with fields that are only meaningful inside this
+    agent's graph (feedback loops, human prompts, flags, etc.).
+    These fields must NEVER leak into overallState directly.
+    """
     topLevelSubtopicCount: int = 0
     initialFocus: str = ""
     breakdownFeedback: str = ""
     editorialFeedback: str = ""
     humanPrompt: str = ""
 
-class Expert(BaseModel):
-    name: str = Field(..., description="The name of the expert.")
-    expertise: str= Field(..., description="A brief description of the expert's area of expertise.")
-    subtopic: str = Field(..., description="The subtopic that the expert is associated with.")
-
-
-class ExpertsPayload(BaseModel):
-    experts: List[Expert] = Field(default_factory=list)
-
-topicBreakdown_instructions = '''
-You are an expert in breaking down complex topics into smaller, more manageable subtopics. 
-Rules:
-
-1. Divide {Topic} into concrete top-level subtopics.
-2. Any subtopic can contain nested subtopics recursively.
-3. Subtopics must be specific, not vague categories.
-4. Avoid redundancy across sibling subtopics.
-5. Maintain logical learning progression.
-6. Avoid over-fragmentation.
-7. Do not exceed the specified depth; depth should be dynamic per branch.
-8. Some branches can stop earlier if already atomic, while others can go deeper when needed.
-9. Use editorial feedback when provided: {editorialFeedback}
-10. Output must strictly follow the required structured schema.
-11. The structure must be sufficient for someone to reach professional-level understanding.
-'''
-
-expert_generation_instructions = ''' 
-You are an expert in profiling, your goal is to assign experts to each subtopic. 
-Rules:
-
-1. For each provided subtopic, identify a suitable expert.
-2. Provide the expert's name, area of expertise, and associated subtopic.
-3. Ensure the expert's expertise aligns with the subtopic.
-4. Output must strictly follow the required structured schema.
-'''
-
-#Breakdown topic into subtopics and defining an expert for each subtopic, and the estimated depth of the topic tree.
+# helper function to extract domain names from the subtopic structure for expert generation
 def _extract_domains(subtopics: List[SubTopic]) -> List[str]:
-    return [subtopic.title for subtopic in subtopics if subtopic.subtopics] # I'm trying to get only the top subtopics as domains, but it's not working as expected. I need to debug this.
+    return [subtopic.title for subtopic in subtopics]
 
-def gather_initial_focus(state: TopicBreakdownState):
-    Topic = state['Topic']
+
+def gather_initial_focus(state: privateState):
+    Topic = state.Topic
     return {
-        'humanPrompt': f"Do you want to focus on any specific part of '{Topic}' or what's on your mind? (Press enter to skip)"
+        'humanPrompt': (
+            f"Do you want to focus on any specific part of '{Topic}' "
+            "or should the breakdown cover all aspects broadly? Please specify if you have a preference. \n(press Enter to skip)"
+        )
     }
 
-def breakdown_topic(state: TopicBreakdownState):
-    Topic = state['Topic']
-    estimatedDepth = state['estimatedDepth']
-    editorialFeedback = state.get('editorialFeedback', '')
-    initialFocus = state.get('initialFocus', '')
-    
+
+def breakdown_topic(state: privateState):
+    Topic = state.Topic
+    estimatedDepth = state.estimatedDepth
+    editorialFeedback = state.editorialFeedback
+    initialFocus = state.initialFocus
+
     focus_context = f" Focus specifically on: {initialFocus}" if initialFocus else ""
 
-    structured_llm = llm.with_structured_output(TopicBreakdownState)
+    structured_llm = llm.with_structured_output(TopicBreakdownSchema)
 
-    system_message = SystemMessage(content=topicBreakdown_instructions.format(Topic=Topic, editorialFeedback=editorialFeedback))
+    system_message = SystemMessage(
+        content=topicBreakdown_instructions.format(
+            Topic=Topic, editorialFeedback=editorialFeedback
+        )
+    )
     user_message = HumanMessage(
         content=(
-            f"Break down the topic '{Topic}' into concrete top-level subtopics with recursive nested subtopics.{focus_context} "
+            f"Break down the topic '{Topic}' into concrete top-level subtopics "
+            f"with recursive nested subtopics.{focus_context} "
             f"Keep maximum depth at {estimatedDepth}. "
-            "Allow uneven branch depth: stop early for atomic branches and go deeper only when meaningful. "
+            "Allow uneven branch depth: stop early for atomic branches and go "
+            "deeper only when meaningful. "
             "Return the result strictly in the required schema."
         )
     )
@@ -103,14 +83,15 @@ def breakdown_topic(state: TopicBreakdownState):
     breakdown = structured_llm.invoke([system_message, user_message])
 
     return {
-        'subTopics': breakdown.subTopics,
-        'domains': _extract_domains(breakdown.subTopics),
+        'subTopics':   breakdown.subTopics,
+        'domains':     _extract_domains(breakdown.subTopics),
+        'humanPrompt': '',   # clear stale prompt so it doesn't re-print on the next event
     }
 
-# Show breakdown and ask if user is satisfied
-def review_breakdown(state: TopicBreakdownState):
-    subTopics = state.get('subTopics', [])
-    
+
+def review_breakdown(state: privateState):
+    subTopics = state.subTopics
+
     def format_subtopics(topics, indent=0):
         result = ""
         for topic in topics:
@@ -118,47 +99,42 @@ def review_breakdown(state: TopicBreakdownState):
             if topic.subtopics:
                 result += format_subtopics(topic.subtopics, indent + 1)
         return result
-    
+
     breakdown_display = format_subtopics(subTopics)
-    
+
     return {
-        'humanPrompt': f"Here's the breakdown:\n\n{breakdown_display}\nAre you satisfied with this breakdown? (yes/no, or provide feedback for changes)"
+        'humanPrompt': (
+            f"Here's the breakdown:\n\n{breakdown_display}\n"
+            "Are you satisfied with this breakdown? "
+            "(yes/no, or provide feedback for changes)"
+        )
     }
 
-def should_regenerate(state: TopicBreakdownState):
-    """Check if user wants to regenerate the breakdown based on their feedback"""
-    feedback = state.get('breakdownFeedback', '').lower().strip()
-    
+
+def should_regenerate(state: privateState) -> str:
+    feedback = state.breakdownFeedback.lower().strip()
     if feedback in ['yes', 'y', '', 'ok', 'good', 'satisfied']:
         return 'continue'
-    else:
-        return 'regenerate'
+    return 'regenerate'
 
-    breakdown = structured_llm.invoke([system_message, user_message])
 
-    return {
-        'subTopics': breakdown.subTopics,
-        'domains': _extract_domains(breakdown.subTopics),
-    }
-
-# generate experts
-def generate_experts(state: TopicBreakdownState):
+def generate_experts(state: privateState):
     structured_llm = llm.with_structured_output(ExpertsPayload)
-    domains= state.get('domains', [])
+    domains = state.domains
 
     system_message = SystemMessage(content=expert_generation_instructions)
     user_message = HumanMessage(
         content=(
             f"Assign experts to the following domains: {domains}. "
-            f"Return the result strictly in the required schema."
+            "Return the result strictly in the required schema."
         )
     )
 
-    experts = structured_llm.invoke([system_message, user_message])
+    experts_payload = structured_llm.invoke([system_message, user_message])
+    return {'experts': experts_payload.experts}
 
-    return {'experts': experts.experts}
 
-builder = StateGraph(TopicBreakdownState)
+builder = StateGraph(privateState)
 builder.add_node('gather_initial_focus', gather_initial_focus)
 builder.add_node('breakdown_topic', breakdown_topic)
 builder.add_node('review_breakdown', review_breakdown)
@@ -172,7 +148,7 @@ builder.add_conditional_edges(
     should_regenerate,
     {
         'continue': 'generate_experts',
-        'regenerate': 'breakdown_topic'
+        'regenerate': 'breakdown_topic',
     }
 )
 builder.add_edge('generate_experts', END)
@@ -180,48 +156,99 @@ builder.add_edge('generate_experts', END)
 memory = MemorySaver()
 graph = builder.compile(
     checkpointer=memory,
-    interrupt_after=['gather_initial_focus', 'review_breakdown']  
+    interrupt_after=['gather_initial_focus', 'review_breakdown'],
 )
 
-def run_with_human_feedback(topic: str, depth: int = 3, thread_id: str = "research_thread"):
+
+# Runner with human-in-the-loop feedback
+def run_with_human_feedback(
+    topic: str,
+    depth: int = 3,
+    thread_id: str = "research_thread",
+) -> Optional[dict]:
     config = {"configurable": {"thread_id": thread_id}}
-    
+
     initial_state = {
         "Topic": topic,
-        "estimatedDepth": depth
+        "estimatedDepth": depth,
     }
-    
+
     print(f"\n{'='*50}")
     print("STARTING RESEARCH AGENT")
     print(f"{'='*50}\n")
-    
+
+    # --- Step 1: gather_initial_focus ---
     for event in graph.stream(initial_state, config, stream_mode="values"):
-        if 'humanPrompt' in event:
+        if event.get('humanPrompt'):
             print(event['humanPrompt'])
-    
+
     initial_focus = input("\nYour response: ").strip()
     graph.update_state(config, {"initialFocus": initial_focus})
-    
+
+    # --- Step 2: breakdown_topic → review_breakdown ---
     for event in graph.stream(None, config, stream_mode="values"):
-        if 'humanPrompt' in event:
+        if event.get('humanPrompt'):
             print(f"\n{event['humanPrompt']}")
-    
-    # Get user's feedback on breakdown
+
+    # --- Step 3: iterative feedback loop ---
+    final_state = {}
     while True:
         breakdown_feedback = input("\nYour response: ").strip()
-        graph.update_state(config, {"breakdownFeedback": breakdown_feedback, "editorialFeedback": breakdown_feedback})
-        final_state = None
+        graph.update_state(
+            config,
+            {"breakdownFeedback": breakdown_feedback, "editorialFeedback": breakdown_feedback},
+        )
+
         for event in graph.stream(None, config, stream_mode="values"):
             final_state = event
-            if 'humanPrompt' in event:
+            if event.get('humanPrompt'):
                 print(f"\n{event['humanPrompt']}")
-        
+
         snapshot = graph.get_state(config)
         if not snapshot.next:
             break
-    
-    print(f"\n{'='*50}")
-    print("RESEARCH COMPLETE!")
-    print(f"{'='*50}\n")
-    
+
     return final_state
+
+
+# Handoff to the shared graph
+def build_topic_breakdown_result(final_state: dict) -> TopicBreakdownResult:
+    return TopicBreakdownResult(
+        Topic=final_state.get('Topic', ''),
+        estimatedDepth=final_state.get('estimatedDepth', 0),
+        subTopics=final_state.get('subTopics', []),
+        domains=final_state.get('domains', []),
+        experts=final_state.get('experts', []),
+    )
+
+def expert_node(state: overallState) -> dict:
+    """LangGraph node wrapper: extracts the topic from state, runs the
+    expert breakdown sub-graph with human-in-the-loop, and writes the
+    resulting TopicBreakdownResult back into overallState."""
+    topic = ""
+    for msg in state["messages"]:
+        content = getattr(msg, "content", "")
+        if content.startswith("Research:"):
+            topic = content.removeprefix("Research:").strip()
+            break
+    if not topic and state["messages"]:
+        topic = state["messages"][0].content
+
+    final_state = run_with_human_feedback(topic=topic)
+    if final_state is None:
+        return {}
+
+    breakdown = build_topic_breakdown_result(final_state)
+    return {
+        "topic_breakdown": breakdown,
+        "messages": [
+            AIMessage(
+                content=(
+                    f"Expert breakdown complete for '{topic}'. "
+                    f"Found {len(breakdown.experts)} experts across "
+                    f"{len(breakdown.domains)} domains."
+                ),
+                name="Expert",
+            )
+        ],
+    }

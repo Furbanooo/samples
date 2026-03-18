@@ -1,18 +1,46 @@
 from dotenv import load_dotenv
-from langchain_core.messages import AIMessage
+from pydantic import BaseModel, Field
+from typing import Literal
+from langchain_core.messages import AIMessage, SystemMessage, HumanMessage
 from langchain_openai import ChatOpenAI
-from src.prompts import SUPERVISOR_instructions
-from typing import Dict, Any
+
+from ..overallState import overallState
+from ..prompts import SUPERVISOR_SYSTEM_PROMPT
 
 load_dotenv()
-llm = ChatOpenAI(model="gpt-4-0613", temperature=0.7)
+llm = ChatOpenAI(model="gpt-4o", temperature=0)
 
-supervisor = llm.with_structured_output(SUPERVISOR_instructions)
 
-def supervisor_node(state: Dict[str, Any]) -> Dict[str, Any]:
-    result = supervisor.invoke({"messages": state["messages"][-5:]})
-    agent = result.content.strip().lower()
+class SupervisorDecision(BaseModel):
+    reasoning: str = Field(
+        ..., description="One sentence explaining why this agent was chosen."
+    )
+    next: Literal["expert_breakdown", "researcher", "writer", "FINISH"] = Field(
+        ..., description="The next agent to run, or FINISH when complete."
+    )
+
+
+structured_supervisor = llm.with_structured_output(SupervisorDecision)
+
+
+def supervisor_node(state: overallState) -> dict:
+    """
+    Reads the last 5 messages from shared state, decides which agent runs
+    next, and writes the decision back into overallState.
+    """
+    decision: SupervisorDecision = structured_supervisor.invoke([
+        SystemMessage(content=SUPERVISOR_SYSTEM_PROMPT),
+        HumanMessage(content=f"Conversation so far:\n{state['messages'][-5:]}"),
+    ])
+
     return {
-        "messages": [AIMessage(content=f"Routing to: {agent}", name="Supervisor")],
-        "next_agent": agent
+        "messages": [
+            AIMessage(
+                content=(
+                    f"[Supervisor] → {decision.next} — {decision.reasoning}"
+                ),
+                name="Supervisor",
+            )
+        ],
+        "next_agent": decision.next,
     }
