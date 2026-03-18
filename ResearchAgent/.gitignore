@@ -54,7 +54,20 @@ chroma/
 *.pkl
 
 # =========================
-# LangGraph 
+# LangGraph
 # =========================
 .langgraph_api
 langgraph.json
+
+# =========================
+# Project output
+# =========================
+*.html
+output/
+
+# =========================
+# Testing
+# =========================
+.pytest_cache/
+htmlcov/
+.coverage
