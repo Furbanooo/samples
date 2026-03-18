@@ -2,14 +2,14 @@ from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 from typing import List, Optional
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 from ..overallState import overallState, SubTopic, Expert, TopicBreakdownResult
 from ..prompts import topicBreakdown_instructions, expert_generation_instructions
+from ..models import CREATIVE
 
 load_dotenv()
-llm = ChatOpenAI(model="gpt-4o", temperature=0.7)
+llm = CREATIVE
 
 
 class TopicBreakdownSchema(BaseModel):

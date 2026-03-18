@@ -5,7 +5,6 @@ from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any, Literal
 from typing_extensions import TypedDict, Annotated
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Send
 
@@ -14,14 +13,15 @@ from ..overallState import (
     ReportVisual, WrittenSection,
 )
 from ..prompts import report_planning_instructions, section_writing_instructions
+from ..models import CREATIVE, STRICT
 
 load_dotenv()
 
 # Two temperatures:
 # - planner/writer uses 0.7 for creative, varied prose
 # - assembler uses 0.0 — pure deterministic formatting, no creativity needed
-llm        = ChatOpenAI(model="gpt-4o", temperature=0.7)
-llm_strict = ChatOpenAI(model="gpt-4o", temperature=0.0)
+llm        = CREATIVE
+llm_strict = STRICT
 
 
 class PlannedSection(BaseModel):

@@ -4,7 +4,6 @@ from pydantic import BaseModel, Field
 from typing import List, Dict, Any
 from typing_extensions import TypedDict, Annotated
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
 from langchain_community.tools.tavily_search import TavilySearchResults
 from langchain_community.document_loaders import WikipediaLoader
 from langgraph.graph import END, START, StateGraph
@@ -12,9 +11,10 @@ from langgraph.types import Send
 
 from ..overallState import overallState, Expert, TopicBreakdownResult
 from ..prompts import search_query_instructions, deep_question_generation_instructions
+from ..models import CREATIVE
 
 load_dotenv()
-llm = ChatOpenAI(model="gpt-4o", temperature=0.7)
+llm = CREATIVE
 
 
 class SearchQuery(BaseModel):
