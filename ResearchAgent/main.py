@@ -24,7 +24,6 @@ for chunk in app.stream({
 
 # ── Terminal summary ──────────────────────────────────────────────────────────
 report = final_chunk.get("writer_draft", "")
-
 if report:
     print(f"\n{'='*60}")
     print("REPORT PREVIEW (first 2000 chars)")

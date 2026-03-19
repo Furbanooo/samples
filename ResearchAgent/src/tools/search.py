@@ -1,10 +1,13 @@
 from langchain_community.tools.tavily_search import TavilySearchResults
 from langchain_community.document_loaders import WikipediaLoader
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.tools import tool
 from src.agents.expert import Expert
 from src.graph import ResearchState
 from prompts import search_query_instructions
+from models import STRICT
+
+llm = STRICT
 
 tavily = TavilySearchResults(max_results=5)
 

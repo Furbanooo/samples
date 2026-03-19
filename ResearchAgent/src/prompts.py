@@ -1,9 +1,4 @@
-# ---------------------------------------------------------------------------
-# All prompt strings in one place.
-# ---------------------------------------------------------------------------
-
 # --- expert_graph -----------------------------------------------------------
-
 topicBreakdown_instructions = """
 You are an expert in breaking down complex topics into smaller, more manageable subtopics.
 Rules:
@@ -30,7 +25,6 @@ Rules:
 """
 
 # --- researcher -------------------------------------------------------------
-
 search_query_instructions = """
 Hi {expert_name}, you are an expert in {expert_expertise}.
 Your task is to help gather information on '{expert_subtopic}' so the user can
@@ -47,7 +41,6 @@ Cover foundational concepts, current trends, controversies, and future direction
 """
 
 # --- writer -----------------------------------------------------------------
-
 report_planning_instructions = """
 You are a senior research editor. You have received research notes from multiple
 domain experts on the topic "{topic}".
@@ -108,7 +101,6 @@ Output must strictly follow the required structured schema.
 """
 
 # --- supervisor -------------------------------------------------------------
-
 SUPERVISOR_SYSTEM_PROMPT = """
 You are the supervisor of a multi-agent research pipeline.
 Decide which agent should act next based on the current conversation state.

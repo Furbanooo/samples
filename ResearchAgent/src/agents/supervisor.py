@@ -21,10 +21,6 @@ structured_supervisor = llm.with_structured_output(SupervisorDecision)
 
 
 def supervisor_node(state: overallState) -> dict:
-    """
-    Reads the last 5 messages from shared state, decides which agent runs
-    next, and writes the decision back into overallState.
-    """
     decision: SupervisorDecision = structured_supervisor.invoke([
         SystemMessage(content=SUPERVISOR_SYSTEM_PROMPT),
         HumanMessage(content=f"Conversation so far:\n{state['messages'][-5:]}"),

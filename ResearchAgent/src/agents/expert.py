@@ -37,10 +37,8 @@ class privateState(TopicBreakdownSchema):
     editorialFeedback: str = ""
     humanPrompt: str = ""
 
-# helper function to extract domain names from the subtopic structure for expert generation
 def _extract_domains(subtopics: List[SubTopic]) -> List[str]:
     return [subtopic.title for subtopic in subtopics]
-
 
 def gather_initial_focus(state: privateState):
     Topic = state.Topic
@@ -173,11 +171,6 @@ def run_with_human_feedback(
     print(f"\n{'='*50}")
     print("STARTING RESEARCH AGENT")
     print(f"{'='*50}\n")
-
-    # Track the last prompt shown so we never print the same message twice.
-    # stream_mode="values" re-emits the full state on every node step, so
-    # humanPrompt lingers in stale events (e.g. generate_experts still carries
-    # the review_breakdown prompt). Comparing against last_shown filters those out.
     last_shown = ""
 
     def _show_prompt(event: dict) -> None:
