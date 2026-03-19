@@ -257,4 +257,4 @@ python main.py
 
 ## Output example
 
-[LangChain Academy Module 4 research assistant\](<outputEx/zombi fungus.pdf>)
+[Zombi fungus](<outputEx/zombi fungus.pdf>)
