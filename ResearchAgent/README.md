@@ -12,14 +12,14 @@ branches **in parallel** — one branch per expert.
 
 ## What was revisited
 
-| Aspect | Original (Academy) | This version |
-|---|---|---|
-| Architecture | Single flat graph | Supervisor + 3 nested sub-graphs |
-| Research | One LLM call | Parallel branches per expert (fan-out with `Send`) |
-| Expert assignment | Hardcoded personas | LLM-generated experts from topic breakdown |
-| Human feedback | None | Interactive breakdown review loop |
-| State design | One shared state | Outer `overallState` + private state per sub-graph |
-| Report output | Plain text | Full HTML with Chart.js visuals and tables |
+| Aspect            | Original (Academy) | This version                                       |
+| ----------------- | ------------------ | -------------------------------------------------- |
+| Architecture      | Single flat graph  | Supervisor + 3 nested sub-graphs                   |
+| Research          | One LLM call       | Parallel branches per expert (fan-out with `Send`) |
+| Expert assignment | Hardcoded personas | LLM-generated experts from topic breakdown         |
+| Human feedback    | None               | Interactive breakdown review loop                  |
+| State design      | One shared state   | Outer `overallState` + private state per sub-graph |
+| Report output     | Plain text         | Full HTML with Chart.js visuals and tables         |
 
 ---
 
@@ -87,6 +87,7 @@ The first sub-graph uses `interrupt_after` to pause and collect human input at t
 ```
 
 **Key concepts used:**
+
 - `interrupt_after` — pauses graph, waits for human
 - `checkpointer` + `thread_id` — saves state between pauses
 - `graph.update_state()` — injects human input into frozen state
@@ -128,6 +129,7 @@ One branch per expert, all running in parallel. Results are merged back via a re
 ```
 
 **Key concepts used:**
+
 - `Send` — fans out to N parallel branches with independent private state
 - `Annotated[List[ExpertResult], operator.add]` — reducer merges parallel results
 - Nested compiled graph — `expert_branch_graph` runs inside each `research_expert` node
@@ -165,6 +167,7 @@ Report sections are written in parallel, then assembled into a single HTML docum
 ```
 
 **Key concepts used:**
+
 - Private state per branch (`SectionWritingState`) separate from outer `WriterState`
 - `operator.add` reducer collects `WrittenSection` objects from all parallel branches
 - `_slice_notes_for_section` — each branch only receives the notes relevant to its section
@@ -239,15 +242,19 @@ python main.py
 
 ## Key LangGraph concepts exercised
 
-| Concept | Where |
-|---|---|
-| `StateGraph` + TypedDict state | `overallState`, `WriterState`, `ParallelResearchState` |
-| `StateGraph` + Pydantic state | `privateState`, `ResearchState`, `SectionWritingState` |
-| `add_messages` reducer | `overallState.messages` |
-| `operator.add` reducer | parallel branch results |
-| Supervisor routing loop | `graph.py` |
-| `interrupt_after` + human-in-the-loop | `expert.py` |
-| `Send` fan-out (parallel branches) | `researcher.py`, `writer.py` |
-| Nested compiled sub-graphs | all three agent files |
-| `MemorySaver` checkpointer | expert sub-graph, outer graph |
-| `with_structured_output` | every LLM call |
+| Concept                               | Where                                                  |
+| ------------------------------------- | ------------------------------------------------------ |
+| `StateGraph` + TypedDict state        | `overallState`, `WriterState`, `ParallelResearchState` |
+| `StateGraph` + Pydantic state         | `privateState`, `ResearchState`, `SectionWritingState` |
+| `add_messages` reducer                | `overallState.messages`                                |
+| `operator.add` reducer                | parallel branch results                                |
+| Supervisor routing loop               | `graph.py`                                             |
+| `interrupt_after` + human-in-the-loop | `expert.py`                                            |
+| `Send` fan-out (parallel branches)    | `researcher.py`, `writer.py`                           |
+| Nested compiled sub-graphs            | all three agent files                                  |
+| `MemorySaver` checkpointer            | expert sub-graph, outer graph                          |
+| `with_structured_output`              | every LLM call                                         |
+
+## Output example
+
+[LangChain Academy Module 4 research assistant\](<outputEx/zombi fungus.pdf>)
